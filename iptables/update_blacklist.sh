@@ -13,6 +13,14 @@
 # the same blacklist.zone file name. The next time that update_firewall.sh is run, typically on the next reboot,
 # the blacklist.zone file will be used to populate an ipset.
 
+# WARNING
+# Take care not to run the update_blacklist.sh after a bad login attempt from a known good host,
+# because you will then blacklist your host! Not recommended to run this as a cron job unless you
+# have access to the host console. Although this script is mainly intended to build dynamic blacklists
+# based on bad login attempts on a specific host, you could also maintain a blacklist of your own,
+# saved as /root/zones/blacklist.zone, prior to running the script for the first time. In my use case,
+# I am concerned only about individual IPs, so I have not yet tested blacklisting entire subnets.
+
 # backup the zone file, assuming that it exists
 mkdir -p /root/zones # make the dir
 touch /root/zones/blacklist.zone # make the file if it doesn't already exist
