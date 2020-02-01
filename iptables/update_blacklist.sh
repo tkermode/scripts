@@ -2,7 +2,7 @@
 # update_blacklist.sh
 # Update a blacklist of bad IPs by combining the existing blacklist and the current list of bad IPs from btmp
 
-# Concatentae the output of unique IPs from the previously saved blacklist (if any) and the current btmp contents.
+# Concatenate the output of unique IPs from the previously saved blacklist (if any) and the current btmp contents.
 
 # For whatever stupid reason, btmp is binary, and if you simply cat it, the contents are still not
 # text...so we have to do some awk magic. Plus we want to look for just good IP addresses and not
