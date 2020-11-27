@@ -1,0 +1,169 @@
+# !/bin/bash
+# update_firewall.sh
+# Update firewall by grabbing existing rulesets from active config,
+# then grabbing any IPs blocked by fail2ban as well as all IPs from btmp.
+# Sort all the IPs, find unique, write a new ruleset based on this.
+# Save temporary ruleset, then purge existing firewall config and subsitute the
+# new ruleset.
+
+# Also, destroy and repopulate ipset rulesets, and add those back into the firewall as well.
+
+# Set date variable to use the string in various filesnames later in script.
+# date will be: year-month-day-hourminute-second (24 hour time)
+TheDate=`date +%FT%H%M%S`
+
+# save current ruleset to a backup file, including today's datetime as part of the filename.
+iptables-save > /root/iptables_rules_backup_before_changes_$TheDate
+
+# disable Internet access while we rebuild the firewall to prevent attacks during the ruleset rebuilding.
+/sbin/route del default gw 192.168.1.1
+
+# Flush the current firewall rules
+iptables -P INPUT ACCEPT
+iptables -P FORWARD ACCEPT
+iptables -P OUTPUT ACCEPT
+iptables -t nat -F
+iptables -t mangle -F
+iptables -F
+iptables -X
+
+# Allow existing connections to continue
+iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Accept everything from the 192.168.1.x network
+iptables -A INPUT -s 192.168.1.0/24 -j ACCEPT
+
+# Accept everything from certain other trusted networks
+# site5.com kermodex.com host
+iptables -A INPUT -s 129.121.3.174/32 -j ACCEPT
+
+# FE subnets
+iptables -A INPUT -s 148.108.128.0/19 -j ACCEPT
+iptables -A INPUT -s 148.108.160.0/19 -j ACCEPT
+iptables -A INPUT -s 148.108.224.0/19 -j ACCEPT
+iptables -A INPUT -s 148.108.32.0/19 -j ACCEPT
+iptables -A INPUT -s 148.108.192.0/20 -j ACCEPT
+iptables -A INPUT -s 148.108.208.0/20 -j ACCEPT
+iptables -A INPUT -s 148.108.48.0/20 -j ACCEPT
+iptables -A INPUT -s 148.108.64.0/18 -j ACCEPT
+iptables -A INPUT -s 148.108.96.0/24 -j ACCEPT
+iptables -A INPUT -s 148.108.98.0/24 -j ACCEPT
+iptables -A INPUT -s 205.132.72.0/24 -j ACCEPT
+iptables -A INPUT -s 205.132.73.0/24 -j ACCEPT
+iptables -A INPUT -s 205.132.74.0/24 -j ACCEPT
+iptables -A INPUT -s 205.132.75.0/24 -j ACCEPT
+iptables -A INPUT -s 205.132.79.0/24 -j ACCEPT
+iptables -A INPUT -s 205.132.76.0/23 -j ACCEPT
+
+
+# Allow outgoing connections from this host
+iptables -P OUTPUT ACCEPT
+# Local loopback rules
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A OUTPUT -o lo -j ACCEPT
+
+# ipset stuff
+
+# get new zone files - careful, could overwrite good files if the site goes down! leave commented out unless need to change it!!!
+# wget -O /root/zones/ch.zone http://www.ipdeny.com/ipblocks/data/countries/ch.zone
+# wget -O /root/zones/de.zone http://www.ipdeny.com/ipblocks/data/countries/de.zone
+# wget -O /root/zones/us.zone http://www.ipdeny.com/ipblocks/data/countries/us.zone
+
+# destroy and rebuild ipset whitelists
+ipset destroy whitelist_ch
+ipset destroy whitelist_de
+ipset destroy whitelist_us
+# ipset -N whitelist_ch nethash
+# ipset -N whitelist_de nethash
+ipset -N whitelist_us nethash
+# for IP in $(cat /root/zones/ch.zone);do ipset -A whitelist_ch $IP;done;
+# for IP in $(cat /root/zones/de.zone);do ipset -A whitelist_de $IP;done;
+for IP in $(cat /root/zones/us.zone);do ipset -A whitelist_us $IP;done;
+# ipset save whitelist_ch -file /root/zones/whitelist_ch.save
+# ipset save whitelist_de -file /root/zones/whitelist_de.save
+ipset save whitelist_us -file /root/zones/whitelist_us.save
+# ipset destroy whitelist_ch
+# ipset destroy whitelist_de
+ipset destroy whitelist_us
+# ipset restore -file /root/zones/whitelist_ch.save
+# ipset restore -file /root/zones/whitelist_de.save
+ipset restore -file /root/zones/whitelist_us.save
+
+# Set up the ipset country whitelist rules in iptables
+iptables -N countryfilter
+iptables -A INPUT -m state --state NEW -j countryfilter
+iptables -A countryfilter -m set --match-set whitelist_ch src -j RETURN
+iptables -A countryfilter -m set --match-set whitelist_de src -j RETURN
+iptables -A countryfilter -m set --match-set whitelist_us src -j RETURN
+iptables -A countryfilter -j REJECT
+
+
+# Find all the current blocked IPs in iptables, including both those manually added and those
+# added by fail2ban during the current session. Combine with those in btmp (bad login attempts)
+# and find the uniq ones, sorted, and send them to a file.
+# (iptables -L |grep -E -o '(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)'; last -f /var/log/btmp |grep -E -o '(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)') | sort | uniq > /root/bad_ips.$TheDate
+
+# (cat /root/bad_ips.$TheDate; cat bad_ips_all) |sort |uniq > /root/bad_ips_all.$TheDate
+
+
+# blacklist specific IPs including those which may be in the US netblocks
+# first destroy and rebuild ipset blacklists, then save, destroy, and restore the set,
+# then set up the iptables blacklist rule
+# for IP in $(cat /root/bad_ips);do iptables -A INPUT -s $IP -j REJECT;done
+
+# re-enable Internet access
+/sbin/route add default gw 192.168.1.1
+
+# save the working config to a backup file as well as to the 
+# working file used by iptables-persistent
+# reset the date variable first
+TheDate=`date +%FT%H%M%S`
+iptables-save > /root/iptables_rules_backup_after_changes_$TheDate
+mv /etc/iptables/rules.v4 /etc/iptables/rules_v4_$TheDate.backup
+iptables-save > /etc/iptables/rules.v4
+
+# reload iptables-persistent to simulate a reboot
+service iptables-persistent reload
+
+# restart fail2ban
+service fail2ban force-reload
+
+# null btmp
+# cp /dev/null /var/log/btmp
+
+
+
+
+# Notes and remarks section follows....
+
+# commands to list current blocked ips and those in the last bad logins
+# iptables -L |grep -E -o '(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)' |sort |uniq > iptables_bad_ips
+# last -f /var/log/btmp |grep -E -o '(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)' |sort |uniq > btmp_bad_ips
+
+# alternative method to combine the commands; same results as piping to sort & uniq, just in reverse order with sort -u
+# sort -u <(iptables -L |grep -E -o '(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)') <(last -f /var/log/btmp |grep -E -o '(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)') > all_bad_ips
+
+
+# iptables-save > /root/working.iptables.rules
+# iptables-restore < /root/working.iptables.rules
+
+# sudo iptables-save > /etc/iptables/rules.v4
+
+# iptables-save > /root/working.iptables.rules
+
+# iptables-restore < /root/working.iptables.rules
+
+# for IP in $(cat bad_ips);do iptables -A INPUT -s $IP -j REJECT;done
+
+#!/bin/sh
+# echo "Flushing iptables rules..."
+# sleep 1
+# iptables -F
+# iptables -X
+# iptables -t nat -F
+# iptables -t nat -X
+# iptables -t mangle -F
+# iptables -t mangle -X
+# iptables -P INPUT ACCEPT
+# iptables -P FORWARD ACCEPT
+# iptables -P OUTPUT ACCEPT
