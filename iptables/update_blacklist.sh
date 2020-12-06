@@ -27,7 +27,7 @@ touch /root/zones/blacklist.zone # make the file if it doesn't already exist
 touch /root/zones/blacklist.save # make the file if it doesn't already exist
 mv /root/zones/blacklist.zone /root/zones/blacklist.save # copy the old blacklist to a backup copy
 
-# cat btmp and blacklist.zone
+# concatenate btmp and blacklist.zone
 cat <(lastb |awk '{match($0,/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/); ip = substr($0,RSTART,RLENGTH); print ip}') /root/zones/blacklist.save |sort -t . -k 1,1n -k 2,2n -k 3,3n -k 4,4n |uniq > /root/zones/blacklist.zone
 
 # remove leading space
