@@ -1,0 +1,12 @@
+# Edit .bash_aliases or .bashrc to include this file using the "source" command
+# Example: source /home/my_username/useful_bash_aliases
+
+
+alias rot13="tr '[A-Za-z]' '[N-ZA-Mn-za-m]'" # this lets you translate ROT13 text in a terminal
+alias 7zme="nice -n 19 7z a -t7z -m0=lzma -mx=9 -mfb=64 -md=32m -ms=on" # create a 7z file: 7zme Desktop.7z Desktop/ to compress the contents of Desktop/
+alias tarme="nice -n 19 tar -cvf" # create a tar file from a directory: tarme myfile.tar my_directory/
+alias scrr="screen -DR -c /home/my_user/.config/screen/my_user" # this lets you create and/or reattach to a screen session, where the session is defined in that config file
+alias sudos="sudo su - " # become root using sudo with one command
+alias update="sudo apt-get update;sudo apt-get upgrade;sudo apt-get dist-upgrade" # update and upgrade on Debian-based distros 
+# alias update="sudo yum update" # update and upgrade on CentOS-based distros
+alias sshp="ssh -p 8003" # ssh to a host where some alternate port is used, in this case port 8003
