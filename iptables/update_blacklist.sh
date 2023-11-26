@@ -35,3 +35,6 @@ sed -i '/./,$!d' /root/zones/blacklist.zone # assumes a version of sed which all
 
 # Note that it doesn't matter much when you rotate or null out btmp, because the script will always preserve
 # whatever IPs existed in the blacklist prior to running the script again.
+
+# null btmp now that we have harvested the IPs
+cat /dev/null > /var/log/btmp
