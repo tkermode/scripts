@@ -1,0 +1,2 @@
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/root/bin
+0 2 * * 0 bash /root/bin/update_all.sh >/dev/null 2>&1
